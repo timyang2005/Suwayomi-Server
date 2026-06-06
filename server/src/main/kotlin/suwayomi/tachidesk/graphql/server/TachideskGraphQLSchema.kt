@@ -87,7 +87,7 @@ val schema =
     toSchema(
         config =
             SchemaGeneratorConfig(
-                supportedPackages = listOf("suwayomi.tachidesk.graphql"),
+                supportedPackages = listOf("suwayomi.tachidesk.graphql", "suwayomi.tachidesk.manga.impl.epub"),
                 introspectionEnabled = true,
                 hooks = CustomSchemaGeneratorHooks(),
             ),
