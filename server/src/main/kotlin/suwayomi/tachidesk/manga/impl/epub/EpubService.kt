@@ -7,6 +7,7 @@ package suwayomi.tachidesk.manga.impl.epub
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,6 +21,9 @@ import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import suwayomi.tachidesk.manga.impl.Page
+import suwayomi.tachidesk.manga.impl.util.getChapterCachePath
+import suwayomi.tachidesk.manga.model.table.ChapterTable
 import suwayomi.tachidesk.manga.model.table.MangaTable
 import java.io.File
 import java.time.Instant
@@ -50,9 +54,109 @@ data class EpubChapterInput(
 
 class EpubService {
 
+    private val logger = KotlinLogging.logger {}
     private val json = Json { ignoreUnknownKeys = true }
-
     private val taskProgress = ConcurrentHashMap<Int, MutableStateFlow<EpubTaskProgress>>()
+
+    private fun getExtensionFromMime(mime: String): String = when {
+        mime.contains("png") -> "png"
+        mime.contains("webp") -> "webp"
+        mime.contains("gif") -> "gif"
+        else -> "jpg"
+    }
+
+    private fun findCachedImage(cacheDir: File, pageIndex: Int): File? {
+        val indexStr = String.format("%03d", pageIndex + 1)
+        val possibleNames = listOf(
+            "$indexStr.jpg", "$indexStr.png", "$indexStr.webp",
+            "${pageIndex + 1}.jpg", "${pageIndex + 1}.png"
+        )
+        return cacheDir.listFiles()?.firstOrNull { file ->
+            possibleNames.any { it.equals(file.name, ignoreCase = true) }
+        }
+    }
+
+    private suspend fun downloadChapterImages(
+        mangaId: Int,
+        chapterId: Int,
+        taskId: Int,
+        progress: MutableStateFlow<EpubTaskProgress>,
+        totalChapters: Int,
+        chapterIndex: Int
+    ): Pair<String, List<ImageData>> {
+        val chapterEntry = transaction {
+            ChapterTable.selectAll().where { ChapterTable.id eq chapterId }.first()
+        }
+        val pageCount = chapterEntry[ChapterTable.pageCount]
+        val chapterName = chapterEntry[ChapterTable.name]
+        val isDownloaded = chapterEntry[ChapterTable.isDownloaded]
+        val cacheDir = File(getChapterCachePath(mangaId, chapterId))
+
+        logger.debug { "Chapter $chapterId: $chapterName, pages=$pageCount, downloaded=$isDownloaded" }
+
+        val images = mutableListOf<ImageData>()
+
+        for (pageIndex in 0 until pageCount) {
+            try {
+                var imageData: ByteArray? = null
+                var extension = "jpg"
+
+                // L1: 优先检查已下载章节
+                if (isDownloaded) {
+                    try {
+                        val chapterImageHelper = suwayomi.tachidesk.manga.impl.ChapterDownloadHelper
+                        val (inputStream, mime) = chapterImageHelper.getImage(mangaId, chapterId, pageIndex)
+                        imageData = inputStream.readBytes()
+                        inputStream.close()
+                        extension = getExtensionFromMime(mime)
+                        logger.debug { "L1 hit: chapter $chapterId page $pageIndex from downloads" }
+                    } catch (e: Exception) {
+                        logger.debug { "L1 miss: chapter $chapterId page $pageIndex - ${e.message}" }
+                    }
+                }
+
+                // L2: 检查图片缓存目录
+                if (imageData == null && cacheDir.exists()) {
+                    val cachedFile = findCachedImage(cacheDir, pageIndex)
+                    if (cachedFile != null) {
+                        imageData = cachedFile.readBytes()
+                        extension = cachedFile.extension.ifEmpty { "jpg" }
+                        logger.debug { "L2 hit: chapter $chapterId page $pageIndex from cache" }
+                    }
+                }
+
+                // L3: 从扩展源下载（Page.getPageImage 内置缓存写入）
+                if (imageData == null) {
+                    val (inputStream, mime) = Page.getPageImage(
+                        mangaId = mangaId,
+                        chapterId = chapterId,
+                        index = pageIndex
+                    )
+                    imageData = inputStream.readBytes()
+                    inputStream.close()
+                    extension = getExtensionFromMime(mime)
+                    logger.debug { "L3 download: chapter $chapterId page $pageIndex from source" }
+                }
+
+                images.add(ImageData("page${pageIndex + 1}.$extension", imageData))
+
+                // 更新进度
+                val chapterProgress = (chapterIndex + (pageIndex + 1).toFloat() / pageCount) / totalChapters
+                val progressValue = 0.1f + 0.7f * chapterProgress
+                progress.value = EpubTaskProgress(
+                    taskId,
+                    EpubTaskStatus.DOWNLOADING,
+                    progressValue.coerceAtMost(0.9f),
+                    "Chapter ${chapterIndex + 1}/$totalChapters - Page ${pageIndex + 1}/$pageCount"
+                )
+
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to download page $pageIndex of chapter $chapterId" }
+            }
+        }
+
+        return chapterName to images
+    }
 
     suspend fun createTask(mangaId: Int, config: EpubConfig): Int {
         return withContext(Dispatchers.IO) {
@@ -136,21 +240,18 @@ class EpubService {
 
                 val chaptersWithImages = chapterInputs.mapIndexed { index, chapterInput ->
                     val chapterId = chapterInput[EpubChapterTable.chapterId].value
-                    val images = listOf(
-                        ImageData("page1.jpg", ByteArray(100))
-                    )
-
-                    val progressValue = 0.1f + (0.7f * (index + 1) / chapterInputs.size)
-                    progress.value = EpubTaskProgress(
-                        taskId,
-                        EpubTaskStatus.DOWNLOADING,
-                        progressValue,
-                        "Processing chapter ${index + 1}/${chapterInputs.size}..."
+                    val (chapterName, images) = downloadChapterImages(
+                        mangaId = mangaId,
+                        chapterId = chapterId,
+                        taskId = taskId,
+                        progress = progress,
+                        totalChapters = chapterInputs.size,
+                        chapterIndex = index
                     )
 
                     ChapterWithImages(
                         chapterId = chapterId,
-                        title = "Chapter $chapterId",
+                        title = chapterName,
                         images = images
                     )
                 }
