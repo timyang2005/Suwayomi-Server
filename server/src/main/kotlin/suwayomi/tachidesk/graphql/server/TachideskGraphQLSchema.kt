@@ -19,6 +19,7 @@ import suwayomi.tachidesk.graphql.mutations.BackupMutation
 import suwayomi.tachidesk.graphql.mutations.CategoryMutation
 import suwayomi.tachidesk.graphql.mutations.ChapterMutation
 import suwayomi.tachidesk.graphql.mutations.DownloadMutation
+import suwayomi.tachidesk.graphql.mutations.EpubMutation
 import suwayomi.tachidesk.graphql.mutations.ExtensionMutation
 import suwayomi.tachidesk.graphql.mutations.ImageMutation
 import suwayomi.tachidesk.graphql.mutations.InfoMutation
@@ -35,6 +36,7 @@ import suwayomi.tachidesk.graphql.queries.BackupQuery
 import suwayomi.tachidesk.graphql.queries.CategoryQuery
 import suwayomi.tachidesk.graphql.queries.ChapterQuery
 import suwayomi.tachidesk.graphql.queries.DownloadQuery
+import suwayomi.tachidesk.graphql.queries.EpubQuery
 import suwayomi.tachidesk.graphql.queries.ExtensionQuery
 import suwayomi.tachidesk.graphql.queries.InfoQuery
 import suwayomi.tachidesk.graphql.queries.KoreaderSyncQuery
@@ -51,6 +53,7 @@ import suwayomi.tachidesk.graphql.server.primitives.GraphQLDurationAsString
 import suwayomi.tachidesk.graphql.server.primitives.GraphQLLongAsString
 import suwayomi.tachidesk.graphql.server.primitives.GraphQLUpload
 import suwayomi.tachidesk.graphql.subscriptions.DownloadSubscription
+import suwayomi.tachidesk.graphql.subscriptions.EpubSubscription
 import suwayomi.tachidesk.graphql.subscriptions.InfoSubscription
 import suwayomi.tachidesk.graphql.subscriptions.SyncSubscription
 import suwayomi.tachidesk.graphql.subscriptions.UpdateSubscription
@@ -94,6 +97,7 @@ val schema =
                 TopLevelObject(CategoryQuery()),
                 TopLevelObject(ChapterQuery()),
                 TopLevelObject(DownloadQuery()),
+                TopLevelObject(EpubQuery()),
                 TopLevelObject(ExtensionQuery()),
                 TopLevelObject(InfoQuery()),
                 TopLevelObject(KoreaderSyncQuery()),
@@ -111,6 +115,7 @@ val schema =
                 TopLevelObject(CategoryMutation()),
                 TopLevelObject(ChapterMutation()),
                 TopLevelObject(DownloadMutation()),
+                TopLevelObject(EpubMutation()),
                 TopLevelObject(ExtensionMutation()),
                 TopLevelObject(ImageMutation()),
                 TopLevelObject(InfoMutation()),
@@ -127,6 +132,7 @@ val schema =
         subscriptions =
             listOf(
                 TopLevelObject(DownloadSubscription()),
+                TopLevelObject(EpubSubscription()),
                 TopLevelObject(InfoSubscription()),
                 TopLevelObject(SyncSubscription()),
                 TopLevelObject(UpdateSubscription()),
