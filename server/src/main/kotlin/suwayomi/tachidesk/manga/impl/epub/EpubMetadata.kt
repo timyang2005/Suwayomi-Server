@@ -14,6 +14,25 @@ import java.util.UUID
 
 object EpubMetadata {
 
+    private fun escapeXml(text: String): String {
+        return text
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("\"", "&quot;")
+            .replace("'", "&apos;")
+    }
+
+    private fun getMediaType(fileName: String): String {
+        return when {
+            fileName.endsWith(".jpg", true) || fileName.endsWith(".jpeg", true) -> "image/jpeg"
+            fileName.endsWith(".png", true) -> "image/png"
+            fileName.endsWith(".gif", true) -> "image/gif"
+            fileName.endsWith(".webp", true) -> "image/webp"
+            else -> "image/jpeg"
+        }
+    }
+
     fun generateContainerXml(): String = """<?xml version="1.0" encoding="UTF-8"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
   <rootfiles>
@@ -25,7 +44,8 @@ object EpubMetadata {
         config: EpubConfig,
         mangaTitle: String,
         chapters: List<String>,
-        coverImage: String?
+        coverImage: String?,
+        uuid: String = UUID.randomUUID().toString()
     ): String {
         val manifestItems = buildString {
             appendLine("    <item id=\"toc\" href=\"toc.ncx\" media-type=\"application/x-dtbncx+xml\"/>")
@@ -34,12 +54,12 @@ object EpubMetadata {
 
             if (coverImage != null) {
                 appendLine("    <item id=\"cover\" href=\"Text/cover.xhtml\" media-type=\"application/xhtml+xml\"/>")
-                appendLine("    <item id=\"cover-img\" href=\"Images/$coverImage\" media-type=\"image/jpeg\" properties=\"cover-image\"/>")
+                appendLine("    <item id=\"cover-img\" href=\"Images/${escapeXml(coverImage)}\" media-type=\"${getMediaType(coverImage)}\" properties=\"cover-image\"/>")
             }
 
             chapters.forEachIndexed { index, chapter ->
                 val id = String.format("ch%03d", index + 1)
-                appendLine("    <item id=\"$id\" href=\"Text/$chapter\" media-type=\"application/xhtml+xml\"/>")
+                appendLine("    <item id=\"$id\" href=\"Text/${escapeXml(chapter)}\" media-type=\"application/xhtml+xml\"/>")
             }
         }
 
@@ -58,10 +78,10 @@ object EpubMetadata {
         return """<?xml version="1.0" encoding="UTF-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-    <dc:identifier id="bookid">urn:uuid:${UUID.randomUUID()}</dc:identifier>
-    <dc:title>$mangaTitle</dc:title>
-    <dc:language>${config.language}</dc:language>
-    <dc:creator>${config.author}</dc:creator>
+    <dc:identifier id="bookid">urn:uuid:$uuid</dc:identifier>
+    <dc:title>${escapeXml(mangaTitle)}</dc:title>
+    <dc:language>${escapeXml(config.language)}</dc:language>
+    <dc:creator>${escapeXml(config.author)}</dc:creator>
     <meta property="dcterms:modified">$modified</meta>
   </metadata>
   <manifest>
@@ -73,20 +93,20 @@ $spineItems
 </package>"""
     }
 
-    fun generateTocNcx(chapters: List<String>): String {
+    fun generateTocNcx(chapters: List<String>, uuid: String): String {
         val navPoints = chapters.mapIndexed { index, chapter ->
             val id = String.format("navPoint-%d", index + 1)
             val title = chapter.removeSuffix(".xhtml")
             """    <navPoint id="$id" playOrder="${index + 1}">
-      <navLabel><text>$title</text></navLabel>
-      <content src="Text/$chapter"/>
+      <navLabel><text>${escapeXml(title)}</text></navLabel>
+      <content src="Text/${escapeXml(chapter)}"/>
     </navPoint>"""
         }.joinToString("\n")
 
         return """<?xml version="1.0" encoding="UTF-8"?>
 <ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
   <head>
-    <meta name="dtb:uid" content="urn:uuid:${UUID.randomUUID()}"/>
+    <meta name="dtb:uid" content="urn:uuid:$uuid"/>
     <meta name="dtb:depth" content="1"/>
     <meta name="dtb:totalPageCount" content="0"/>
     <meta name="dtb:maxPageNumber" content="0"/>
@@ -101,7 +121,7 @@ $navPoints
     fun generateNavXhtml(chapters: List<String>): String {
         val navItems = chapters.mapIndexed { index, chapter ->
             val title = chapter.removeSuffix(".xhtml")
-            "        <li><a href=\"Text/$chapter\">$title</a></li>"
+            "        <li><a href=\"Text/${escapeXml(chapter)}\">${escapeXml(title)}</a></li>"
         }.joinToString("\n")
 
         return """<?xml version="1.0" encoding="UTF-8"?>
@@ -158,14 +178,14 @@ img {
 
     fun generateChapterXhtml(chapterTitle: String, images: List<String>): String {
         val imgTags = images.joinToString("\n") { img ->
-            "    <img src=\"../Images/$img\" alt=\"Page\"/>"
+            "    <img src=\"../Images/${escapeXml(img)}\" alt=\"Page\"/>"
         }
 
         return """<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
-  <title>$chapterTitle</title>
+  <title>${escapeXml(chapterTitle)}</title>
   <link rel="stylesheet" type="text/css" href="../styles/manga.css"/>
 </head>
 <body>
@@ -182,7 +202,7 @@ $imgTags
   <link rel="stylesheet" type="text/css" href="../styles/manga.css"/>
 </head>
 <body class="cover-page">
-  <img src="../Images/$coverImage" alt="Cover"/>
+  <img src="../Images/${escapeXml(coverImage)}" alt="Cover"/>
 </body>
 </html>"""
 }

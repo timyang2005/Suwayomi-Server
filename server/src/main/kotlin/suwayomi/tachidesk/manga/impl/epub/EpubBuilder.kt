@@ -80,6 +80,9 @@ class EpubBuilder(private val config: EpubConfig) {
         outputDir: File,
         coverImage: ByteArray?,
     ): File {
+        val epubFileName = sanitizeFileName("$groupTitle.epub")
+        val epubFile = File(outputDir, epubFileName)
+
         val workDir = Files.createTempDirectory("epub-work").toFile()
         val oebpsDir = File(workDir, "OEBPS")
         val textDir = File(oebpsDir, "Text")
@@ -151,9 +154,6 @@ class EpubBuilder(private val config: EpubConfig) {
                 EpubMetadata.generateNavXhtml(chapterFiles),
             )
 
-            val epubFileName = sanitizeFileName("$groupTitle.epub")
-            val epubFile = File(outputDir, epubFileName)
-
             val zipFile = ZipFile(epubFile)
 
             val mimetypeParams = ZipParameters().apply {
@@ -175,6 +175,9 @@ class EpubBuilder(private val config: EpubConfig) {
             }
 
             return epubFile
+        } catch (e: Exception) {
+            epubFile.delete()
+            throw e
         } finally {
             workDir.deleteRecursively()
         }
