@@ -26,8 +26,13 @@
     - [The Suwayomi extension and tracker](#the-suwayomi-extension-and-tracker)
     - [The Suwayomi merge source in Neko](#the-suwayomi-merge-source-in-neko)
     - [Other methods](#other-methods)
-  - [Troubleshooting and Support](#troubleshooting-and-support)
-  - [Contributing and Technical info](#contributing-and-technical-info)
+- [EPUB Export](#epub-export)
+  - [Features](#features)
+  - [Configuration Options](#configuration-options)
+  - [GraphQL API](#graphql-api)
+  - [Output Location](#output-location)
+- [Troubleshooting and Support](#troubleshooting-and-support)
+- [Contributing and Technical info](#contributing-and-technical-info)
   - [Translation](#translation)
   - [Credit](#credit)
   - [License](#license)
@@ -63,6 +68,7 @@ You can use Mihon (Tachiyomi) to access your Suwayomi-Server. For more info look
 - [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr) support to bypass Cloudflare protection
 - Automated WebUI updates (supports the default WebUI and VUI)
 - OPDS and OPDS-PSE support (endpoint: `/api/opds/v1.2`)
+- EPUB export: generate EPUB files from your manga library for offline reading on e-readers and other devices
 
 # Suwayomi Client Projects
 **You need a client/user interface app as a front-end for Suwayomi-Server, if you [Directly Download Suwayomi-Server](https://github.com/Suwayomi/Suwayomi-Server/releases/latest) you'll get a bundled version of [Suwayomi-WebUI](https://github.com/Suwayomi/Suwayomi-WebUI) with it.**
@@ -211,6 +217,108 @@ If you face issues with your setup then we are happy to provide help, just join 
 
 ### Other methods
 Checkout [this issue](https://github.com/Suwayomi/Suwayomi-Server/issues/159) for tracking progress.
+
+## EPUB Export
+
+Suwayomi-Server supports exporting manga as EPUB files, compatible with e-readers like Kindle, Kobo, and other EPUB-reading apps.
+
+### Features
+
+- Export individual manga or entire categories as EPUB files
+- Configurable page sizes for different devices (Kindle Paperwhite, Kindle Oasis, Kobo, or custom dimensions)
+- Automatic whitespace stripping for cleaner pages
+- Configurable image quality (JPEG compression level)
+- Chapter grouping options: single file, by chapter range, or by volume
+- Cover image support
+- Real-time progress tracking via GraphQL subscriptions
+
+### Configuration Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `title` | (required) | Title of the exported EPUB |
+| `author` | `""` | Author metadata field |
+| `language` | `"zh"` | Language code (ISO 639-1) |
+| `cover` | `true` | Whether to include a cover image |
+| `pageSize` | `AUTO` | Page dimensions: `AUTO`, `KINDLE_PW`, `KINDLE_OASIS`, `KOBO`, `CUSTOM` |
+| `imageQuality` | `95` | JPEG quality (1-100) |
+| `stripWhitespace` | `true` | Remove white borders from pages |
+| `groupBy` | `VOLUME` | Grouping strategy: `SINGLE`, `CHAPTER_RANGE`, `VOLUME` |
+| `chaptersPerBook` | `20` | Chapters per EPUB file (when using `CHAPTER_RANGE` or `VOLUME`) |
+
+### GraphQL API
+
+#### List all EPUB tasks
+```graphql
+query {
+  epubTasks(limit: 10) {
+    id
+    mangaId
+    status
+    config { title author language }
+    createdAt
+  }
+}
+```
+
+#### Create a new EPUB task
+```graphql
+mutation {
+  createEpubTask(input: {
+    mangaId: 1
+    config: {
+      title: "My Manga"
+      author: "Author Name"
+      pageSize: KINDLE_PW
+      groupBy: CHAPTER_RANGE
+      chaptersPerBook: 10
+    }
+  }) {
+    epubTask { id status }
+  }
+}
+```
+
+#### Set chapters to include
+```graphql
+mutation {
+  setEpubChapters(input: {
+    taskId: 1
+    chapters: [
+      { chapterId: 101, sortOrder: 1, included: true },
+      { chapterId: 102, sortOrder: 2, included: true },
+      { chapterId: 103, sortOrder: 3, included: false }
+    ]
+  }) {
+    epubTask { id status }
+  }
+}
+```
+
+#### Generate the EPUB
+```graphql
+mutation {
+  generateEpub(input: { taskId: 1 }) {
+    epubTask { id status }
+  }
+}
+```
+
+#### Track progress (subscription)
+```graphql
+subscription {
+  epubTaskProgress(taskId: 1) {
+    status
+    progress
+    message
+    outputFiles
+  }
+}
+```
+
+### Output Location
+
+Generated EPUB files are saved to `~/epub-output/<taskId>/` by default. The path is also stored in the database and accessible via the `outputPath` field on the task.
 
 ## Troubleshooting and Support
 See [this troubleshooting wiki page](https://github.com/Suwayomi/Suwayomi-Server/wiki/Troubleshooting).
