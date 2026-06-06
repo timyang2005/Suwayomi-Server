@@ -6,9 +6,9 @@
 package suwayomi.tachidesk.graphql.queries
 
 import org.jetbrains.exposed.v1.core.SortOrder
-import org.jetbrains.exposed.v1.core.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.sql.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import suwayomi.tachidesk.graphql.directives.RequireAuth
 import suwayomi.tachidesk.graphql.types.EpubOutputType
 import suwayomi.tachidesk.graphql.types.EpubTaskType
@@ -26,7 +26,7 @@ class EpubQuery {
             EpubTaskTable.selectAll().where { EpubTaskTable.id eq taskId }.firstOrNull()?.let {
                 EpubTaskType(
                     id = it[EpubTaskTable.id].value,
-                    mangaId = it[EpubTaskTable.mangaId],
+                    mangaId = it[EpubTaskTable.mangaId].value,
                     status = it[EpubTaskTable.status],
                     config = json.decodeFromString(it[EpubTaskTable.configJson]),
                     groupBy = it[EpubTaskTable.groupBy],
@@ -49,7 +49,7 @@ class EpubQuery {
                 .map {
                     EpubTaskType(
                         id = it[EpubTaskTable.id].value,
-                        mangaId = it[EpubTaskTable.mangaId],
+                        mangaId = it[EpubTaskTable.mangaId].value,
                         status = it[EpubTaskTable.status],
                         config = json.decodeFromString(it[EpubTaskTable.configJson]),
                         groupBy = it[EpubTaskTable.groupBy],
@@ -72,7 +72,7 @@ class EpubQuery {
                 .map {
                     EpubOutputType(
                         id = it[EpubOutputTable.id].value,
-                        taskId = it[EpubOutputTable.taskId],
+                        taskId = it[EpubOutputTable.taskId].value,
                         partNumber = it[EpubOutputTable.partNumber],
                         title = it[EpubOutputTable.title],
                         filePath = it[EpubOutputTable.filePath],

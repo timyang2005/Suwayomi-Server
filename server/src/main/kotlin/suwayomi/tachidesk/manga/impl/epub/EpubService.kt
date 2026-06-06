@@ -13,13 +13,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import org.jetbrains.exposed.v1.core.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
-import org.jetbrains.exposed.v1.sql.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import suwayomi.tachidesk.manga.model.table.MangaTable
 import java.io.File
 import java.time.Instant
@@ -57,7 +57,7 @@ class EpubService {
     suspend fun createTask(mangaId: Int, config: EpubConfig): Int {
         return withContext(Dispatchers.IO) {
             transaction {
-                val task = EpubTaskTable.insertAndGetId {
+                val task = EpubTaskTable.insert {
                     it[EpubTaskTable.mangaId] = mangaId
                     it[EpubTaskTable.status] = "pending"
                     it[EpubTaskTable.configJson] = json.encodeToString(config)
@@ -66,7 +66,7 @@ class EpubService {
                     it[EpubTaskTable.createdAt] = Instant.now().epochSecond
                 }
 
-                task.value
+                task[EpubTaskTable.id].value
             }
         }
     }
@@ -100,7 +100,7 @@ class EpubService {
         }
     }
 
-    fun getTaskProgress(taskId: Int): StateFlow<EpubTaskProgress> {
+    fun getTaskProgress(taskId: Int): MutableStateFlow<EpubTaskProgress> {
         return taskProgress.getOrPut(taskId) {
             MutableStateFlow(EpubTaskProgress(taskId, EpubTaskStatus.PENDING))
         }
@@ -118,7 +118,7 @@ class EpubService {
                 }
 
                 val config = json.decodeFromString<EpubConfig>(task[EpubTaskTable.configJson])
-                val mangaId = task[EpubTaskTable.mangaId]
+                val mangaId = task[EpubTaskTable.mangaId].value
 
                 val mangaTitle = transaction {
                     MangaTable.selectAll().where { MangaTable.id eq mangaId }
@@ -135,7 +135,7 @@ class EpubService {
                 progress.value = EpubTaskProgress(taskId, EpubTaskStatus.DOWNLOADING, 0.1f, "Loading chapters...")
 
                 val chaptersWithImages = chapterInputs.mapIndexed { index, chapterInput ->
-                    val chapterId = chapterInput[EpubChapterTable.chapterId]
+                    val chapterId = chapterInput[EpubChapterTable.chapterId].value
                     val images = listOf(
                         ImageData("page1.jpg", ByteArray(100))
                     )
@@ -175,8 +175,8 @@ class EpubService {
                             it[EpubOutputTable.partNumber] = index + 1
                             it[EpubOutputTable.title] = file.nameWithoutExtension
                             it[EpubOutputTable.filePath] = file.absolutePath
-                            it[EpubOutputTable.chapterStart] = chapterInputs.firstOrNull()?.get(EpubChapterTable.chapterId) ?: 0
-                            it[EpubOutputTable.chapterEnd] = chapterInputs.lastOrNull()?.get(EpubChapterTable.chapterId) ?: 0
+                            it[EpubOutputTable.chapterStart] = chapterInputs.firstOrNull()?.get(EpubChapterTable.chapterId)?.value ?: 0
+                            it[EpubOutputTable.chapterEnd] = chapterInputs.lastOrNull()?.get(EpubChapterTable.chapterId)?.value ?: 0
                             it[EpubOutputTable.fileSize] = file.length()
                             it[EpubOutputTable.status] = "done"
                         }

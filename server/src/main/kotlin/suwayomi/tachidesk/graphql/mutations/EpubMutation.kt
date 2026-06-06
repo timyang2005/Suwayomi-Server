@@ -5,9 +5,9 @@
 
 package suwayomi.tachidesk.graphql.mutations
 
-import org.jetbrains.exposed.v1.core.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.sql.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import suwayomi.tachidesk.graphql.directives.RequireAuth
 import suwayomi.tachidesk.graphql.types.EpubTaskType
 import suwayomi.tachidesk.manga.impl.epub.EpubChapterInput
@@ -109,7 +109,7 @@ class EpubMutation {
             EpubTaskTable.selectAll().where { EpubTaskTable.id eq taskId }.first().let {
                 EpubTaskType(
                     id = it[EpubTaskTable.id].value,
-                    mangaId = it[EpubTaskTable.mangaId],
+                    mangaId = it[EpubTaskTable.mangaId].value,
                     status = it[EpubTaskTable.status],
                     config = json.decodeFromString(it[EpubTaskTable.configJson]),
                     groupBy = it[EpubTaskTable.groupBy],

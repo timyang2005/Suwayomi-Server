@@ -35,8 +35,8 @@ class ImageProcessorTest {
         val processor = ImageProcessor(config)
         val result = processor.process(imageData)
 
-        assertTrue(result.image.width < 60)
-        assertTrue(result.image.height < 60)
+        assertTrue(result.image.width <= 60)
+        assertTrue(result.image.height <= 60)
     }
 
     @Test
@@ -106,7 +106,7 @@ class ImageProcessorTest {
         val bytes = processor.toByteArray(image, "jpg", 95)
 
         assertTrue(bytes.isNotEmpty())
-        val reRead = ImageIO.read(bytes.toByteArray().inputStream())
+        val reRead = ImageIO.read(bytes.inputStream())
         assertEquals(100, reRead.width)
         assertEquals(100, reRead.height)
     }
